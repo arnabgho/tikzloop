@@ -363,8 +363,8 @@
   <p class="subtitle">Implementation notes for the M3 Pro prototype, and a recipe for lifting the same loop into GRPO training on Google Colab.</p>
   <div class="meta-row">
     <span><b>base paper</b> TikZilla (arXiv:2603.03072)</span>
-    <span><b>repo</b> ~/tinkering-projects/tikzloop</span>
-    <span><b>status</b> 11/11 tests passing</span>
+    <span><b>repo</b> ~/tinkering-projects/tikzloop (8 commits)</span>
+    <span><b>status</b> 12/12 tests · GRPO training live</span>
     <span><b>date</b> July 2026</span>
   </div>
 
@@ -373,9 +373,12 @@
     TikZilla trains small LLMs to emit TikZ programs, rewarded by comparing the <em>rendered</em> figure
     against ground truth. We reproduce the executable core of that idea as a local prototype: a hardened
     compile-and-render <b>sandbox</b> (tectonic + poppler), a gym-style <b>multi-turn environment</b> whose
-    observations are compiler errors and VLM critiques, and an <b>inference loop</b> (episode repair +
-    best-of-N reranking) running entirely on Apple Silicon via MLX. Everything below the policy is pure CPU,
-    so the identical sandbox becomes the reward function for GRPO-LoRA training on a free/cheap Colab GPU.
+    observations are compiler errors and VLM critiques, an <b>inference loop</b> (episode repair +
+    best-of-N reranking) — and now a full <b>local GRPO training rig</b> (mlx-lm-lora) with a nine-panel
+    live dashboard, all on Apple Silicon. Smoke-verified end to end: a 0.5B policy moved from a 0.16
+    zero-shot reward to 0.58 within five iterations; a 400-iteration Qwen2.5-3B run is underway.
+    Everything below the policy is pure CPU, so the identical sandbox becomes the reward function for
+    GRPO-LoRA training on a free/cheap Colab GPU.
   </div>
 
   <nav class="toc">
@@ -383,8 +386,9 @@
     <a href="#sandbox"><span class="toc-num">§2</span><span class="toc-title">The verification sandbox</span></a>
     <a href="#env"><span class="toc-num">§3</span><span class="toc-title">Environment, policy, critic, reward</span></a>
     <a href="#lessons"><span class="toc-num">§4</span><span class="toc-title">Field notes: what actually broke</span></a>
-    <a href="#colab"><span class="toc-num">§5</span><span class="toc-title">The RL training loop on Colab</span></a>
-    <a href="#budget"><span class="toc-num">§6</span><span class="toc-title">VRAM &amp; cost budgets</span></a>
+    <a href="#local"><span class="toc-num">§5</span><span class="toc-title">The local GRPO rig (M3 Pro)</span></a>
+    <a href="#colab"><span class="toc-num">§6</span><span class="toc-title">The RL training loop on Colab</span></a>
+    <a href="#budget"><span class="toc-num">§7</span><span class="toc-title">VRAM &amp; cost budgets</span></a>
   </nav>
 </header>
 
@@ -574,7 +578,9 @@ step = env.<span class="fn">step</span>(code)
 <section id="lessons">
   <h2>Field notes: what actually broke</h2>
 
-  <p>Three real defects surfaced while building this — each one is a Colab landmine defused early:</p>
+  <p>Five real defects surfaced while building this. The first three are Colab landmines defused early;
+  the last two would have <em>silently corrupted training</em> — reward hacking through the harness, and a
+  trainer that optimizes nothing:</p>
 
   <table>
     <caption><b>Table 2.</b> Debugging ledger, M3 Pro session of 2026-07-05.</caption>
@@ -595,24 +601,106 @@ step = env.<span class="fn">step</span>(code)
         <td>Bare fragments lack <code>\usetikzlibrary{shapes.geometric}</code>; preamble commands in the body are illegal once wrapped</td>
         <td>Preamble hoisting + dynamic library detection (§2.1), with regression tests</td>
       </tr>
+      <tr>
+        <td>The refusal "I cannot draw that." earned <code class="no">reward 0.82</code></td>
+        <td><b>Reward hacking through the harness.</b> <code>ensure_standalone</code> wraps prose into a valid text document; it compiles, renders as a paragraph, and patch-EMD scores white-on-white generously</td>
+        <td>Reward gate: extracted code must contain a real <code>tikzpicture</code>/<code>circuitikz</code>/<code>tikzcd</code> environment, else class <code>no-code</code>, reward 0.0 — with a regression test</td>
+      </tr>
+      <tr>
+        <td>GRPO "trains", loss moves, adapters never change</td>
+        <td><b>Upstream issue #55</b> — mlx-lm-lora's default <code>importance_sampling_level=None</code> produces an exactly-zero policy gradient; LoRA-B stays 0.0 forever</td>
+        <td>Driver forces <code>"token"</code>; the dashboard's <b>LoRA-B-norm canary</b> panel proves gradients flow (smoke run: ‖B‖ = 1.77 by iter 6)</td>
+      </tr>
     </tbody>
   </table>
 
   <div class="box">
     <span class="box-tag">Verified</span>
-    <p><b>11/11 tests green</b> in 23 s (warm cache); the example flowchart renders pixel-correct
-    (green rounded Start → blue diamond Valid? → red End, "yes" on the second arrow). Policy inference via
-    mlx-lm confirmed working end-to-end with Qwen2.5-Coder-7B-4bit as the stand-in policy.</p>
+    <p><b>12/12 tests green</b>; the example flowchart renders pixel-correct; multi-turn episode confirmed
+    with a real 7B policy (compiled turn 1, and its green-instead-of-red End node is exactly the semantic
+    miss the VLM critic tier exists to catch). GRPO smoke run on Qwen2.5-0.5B-4bit: <b>zero-shot baseline
+    0.25 compile / 0.163 reward → reward mean 0.583 by iteration 5</b>, adapters saved and fused, 6.6 GB
+    peak memory. A second specimen for the gallery: a near-blank rollout scored 0.673 — the generous
+    relaxed-EMD at work, which is why the ink-fraction tripwire is a dashboard panel.</p>
   </div>
 </section>
 
 <!-- ============================== §5 ============================== -->
+<section id="local">
+  <h2>The local GRPO rig (M3 Pro)</h2>
+
+  <p>The training loop from §6's Colab design turned out to run <em>locally first</em>, via
+  <a href="https://github.com/Goekdeniz-Guelmez/mlx-lm-lora">mlx-lm-lora</a> — Apple-Silicon-native GRPO
+  with custom reward functions. Everything lives under <code>train/</code>; the sandbox and reward are the
+  same modules the inference loop uses.</p>
+
+  <h3>Integration: three load-bearing details</h3>
+  <ul class="ledger">
+    <li><span class="file">answer smuggling</span><span class="what">The trainer's dataset schema is
+    <code>prompt / answer / system / type</code>, and reward functions receive the raw <code>answer</code>
+    strings. We put the <b>ground-truth image path</b> in <code>answer</code>; the reward resolves it back
+    to pixels. No trainer changes needed.</span></li>
+    <li><span class="file">python driver</span><span class="what"><code>run_grpo.py</code> drives
+    <code>mlx_lm_lora.train.run()</code> from Python rather than the CLI — required to force
+    <code>importance_sampling_level="token"</code> (the zero-gradient default, Table 2) and to chain our
+    JSONL metrics callback under the optional W&amp;B callback. Hyperparameters mirror the paper:
+    <code>dr_grpo</code> loss, clip 0.2/0.28, β=0, temperature 0.8.</span></li>
+    <li><span class="file">mandatory system</span><span class="what">Every dataset record carries an explicit
+    <code>system</code> prompt — omit it and the trainer injects an R1-style
+    <code>&lt;think&gt;/&lt;answer&gt;</code> template that wrecks TikZ generation.</span></li>
+  </ul>
+
+  <h3>The dashboard: nine panels, one intuition each</h3>
+  <p><code>dashboard.py</code> serves a live page at <code>localhost:8787</code> (5 s polling over
+  append-only JSONL). Each panel is annotated with the failure mode it exists to catch:</p>
+
+  <table>
+    <caption><b>Table 3.</b> Panel → the training intuition it teaches.</caption>
+    <thead><tr><th>Panel</th><th>Healthy</th><th>Sick</th></tr></thead>
+    <tbody>
+      <tr><td>Reward mean ± std (0.1 floor + baseline rules)</td><td>floor harvested early, then grinds up</td><td>flat at 0 — all-fail groups, prompts too hard</td></tr>
+      <tr><td>Compilation rate</td><td>steep early climb (the paper's 52→98% story)</td><td>stuck low: check samples for truncation</td></tr>
+      <tr><td>Degenerate groups (all-fail, zero-variance)</td><td>both fractions falling</td><td>persistently high = zero gradient, wasted steps</td></tr>
+      <tr><td>Similarity band vs <b>ink fraction</b></td><td>move together</td><td class="no">sim ↑ while ink ↓ = blank-figure reward hack</td></tr>
+      <tr><td>Rollout diversity (distinct-completion ratio)</td><td>near 1.0</td><td>falling toward 1/G = entropy collapse</td></tr>
+      <tr><td>KL to reference</td><td>slow drift (β=0 allows it)</td><td>spike usually precedes degenerate outputs</td></tr>
+      <tr><td>Clip activity (low/high)</td><td>some high-side clipping</td><td>constant clipping = learning rate too hot</td></tr>
+      <tr><td>Step timing (full vs reward phase)</td><td>generation dominates — the bandwidth wall, visible</td><td>reward phase ballooning: compile timeouts</td></tr>
+      <tr><td><b>LoRA-B norm canary</b></td><td class="ok">grows off zero within ~10 iters</td><td class="no">flat 0.0 = not training at all — stop the run</td></tr>
+    </tbody>
+  </table>
+
+  <p>Plus a samples gallery (ground truth + one rollout group per contact sheet, rewards stamped) and a
+  table view — the habit the gallery enforces: <em>judge the run by pictures, not curves</em>. The chart
+  palette is the validated reference set (light + dark, CVD-checked per pair).</p>
+
+  <h3>Current run</h3>
+  <p>Data: 500 train + 48 valid DaTikZ-v3 pairs (captions + GT renders), stratified by code length for a
+  curriculum-friendly spread. Baseline first (<code>baseline.py</code> → a rule the curves must beat), then
+  <b>night-3b</b>: Qwen2.5-3B-Instruct-4bit, G=4, 400 iterations, checkpoints every 25 with
+  <code>--resume</code> support. Expected ~6–10 h wall-clock; a log monitor surfaces checkpoint saves and
+  failures without babysitting.</p>
+
+  <div class="codeblock">
+    <div class="bar"><span>the whole workflow</span><span class="lang">bash</span></div>
+<pre>uv run python train/prepare_data.py --train 500 --valid 48
+uv run python train/baseline.py --model mlx-community/Qwen2.5-3B-Instruct-4bit --n 16
+uv run python train/run_grpo.py --model mlx-community/Qwen2.5-3B-Instruct-4bit \
+    --iters 400 --run-name night-3b          <span class="cm"># --resume to continue after interruption</span>
+uv run python train/dashboard.py --run runs/night-3b   <span class="cm"># -&gt; localhost:8787</span></pre>
+  </div>
+</section>
+
+<!-- ============================== §6 ============================== -->
 <section id="colab">
   <h2>The RL training loop on Colab</h2>
 
   <p>The port is small because of what the prototype kept CPU-pure: <b>sandbox, env, reward interface, and
   episode logging move unchanged.</b> Only the two neural endpoints swap backends — the MLX policy becomes an
-  Unsloth-wrapped CUDA model, and the whole environment collapses into a GRPO reward function.</p>
+  Unsloth-wrapped CUDA model, and the whole environment collapses into a GRPO reward function. Better still,
+  §5's local rig already produced the pieces: <code>train/rewards_tikz.py</code> is ~95% reusable (TRL's
+  reward signature differs only cosmetically from mlx-lm-lora's), and the local smoke + 3B runs supply the
+  baselines and hyperparameters a Colab run should start from.</p>
 
   <figure>
     <svg viewBox="0 0 800 270" xmlns="http://www.w3.org/2000/svg" font-family="IBM Plex Mono, monospace">
@@ -782,12 +870,13 @@ trainer.train(resume_from_checkpoint=<span class="kw">True</span>)            <s
   </div>
 </section>
 
-<!-- ============================== §6 ============================== -->
+<!-- ============================== §7 ============================== -->
 <section id="budget">
   <h2>VRAM &amp; cost budgets</h2>
 
   <table>
-    <caption><b>Table 3.</b> What fits where. The free tier covers everything up to serious GRPO.</caption>
+    <caption><b>Table 4.</b> What fits where. The free tier covers everything up to serious GRPO —
+    and the M3 Pro itself covers more than expected (§5).</caption>
     <thead><tr><th>Experiment</th><th>Hardware</th><th>Fits?</th><th>Cost</th></tr></thead>
     <tbody>
       <tr><td>Sandbox + env + eval harness, episode logging</td><td>M3 Pro (36 GB) / any CPU</td><td class="ok">yes — CPU only</td><td class="mono">$0</td></tr>
@@ -800,24 +889,28 @@ trainer.train(resume_from_checkpoint=<span class="kw">True</span>)            <s
 
   <h3>Pre-flight checklist</h3>
   <ul class="checklist">
+    <li><b>Done locally:</b> full pipeline green at toy scale — 0.5B smoke run, 500-sample dataset, G=4,
+    baseline logged (0.25 compile / 0.163 reward), gradients proven flowing</li>
+    <li><b>Done locally:</b> repo history in 8 logical commits, ready to push — cell 1's
+    <code>pip install git+…</code> needs it on GitHub (one <code>gh repo create</code> away)</li>
     <li>Claim free <b>Colab Pro for students</b> (.edu verification) and link it to Kaggle for bonus quota</li>
-    <li>Push <code>tikzloop</code> to GitHub so cell 1 can <code>pip install</code> it</li>
-    <li>Full pipeline green at toy scale (0.5B model, 500 samples, G=4) on a free T4 <em>before</em> renting anything</li>
     <li>Tectonic cache warm on Drive; resume-from-checkpoint path tested with a forced disconnect</li>
-    <li>Baselines logged first: TikZilla-3B zero-shot and best-of-N — the numbers your RL run must beat</li>
+    <li>Read the night-3b dashboard before scaling: its curves decide whether Colab money goes to more
+    steps, better prompts (<code>--redescribe</code>), or a better reward</li>
   </ul>
 
-  <p style="margin-top:36px">The experiment sequence this enables, cheapest first: <b>(i)</b> best-of-N
+  <p style="margin-top:36px">The experiment sequence, cheapest first: <b>(i)</b> best-of-N
   reranking with the reward model (free, pure inference, already runnable), <b>(ii)</b> the agentic
-  repair loop with a VLM critic (free), <b>(iii)</b> hindsight-repair GRPO on a T4 ($0), and
-  <b>(iv)</b> the headline run — GRPO with a decomposed, verifiable reward on an A100 (≤ $50).
-  Each stage produces the data and the baseline for the next.</p>
+  repair loop with a VLM critic (free), <b>(iii)</b> local GRPO on the M3 Pro (running now — §5),
+  <b>(iv)</b> hindsight-repair GRPO on a T4 ($0), and <b>(v)</b> the headline run — GRPO with a
+  decomposed, verifiable reward on an A100 (≤ $50). Each stage produces the data and the baseline
+  for the next.</p>
 </section>
 
 </main>
 
 <footer>
-  <span>tikzloop v0.1.0 · prototype of TikZilla-style verified RL</span>
+  <span>tikzloop v0.1.0 · TikZilla-style verified RL · sandbox → env → GRPO, all local</span>
   <span>M3 Pro → Colab · July 2026</span>
 </footer>
 
