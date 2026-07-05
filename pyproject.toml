@@ -18,6 +18,11 @@ mlx = [
     "mlx-lm>=0.28",
     "mlx-vlm>=0.1.12",
 ]
+# SigLIP patch-embedding reward (EMD similarity vs. ground-truth render)
+reward = [
+    "torch>=2.3",
+    "transformers>=4.45",
+]
 [project.scripts]
 tikzloop = "tikzloop.cli:main"
 
