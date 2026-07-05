@@ -42,6 +42,12 @@ uv run tikzloop demo "..." --critic vlm
 # from tikzloop.reward import SigLIPReward; env = TikZEnv(reward_fn=SigLIPReward())
 ```
 
+## Training (local GRPO on Apple Silicon)
+
+See [`train/README.md`](train/README.md) — GRPO-LoRA with the sandbox as
+reward, live dashboard at localhost:8787, and a what-to-watch cheat sheet
+for the training phenomena the instrumentation exists to surface.
+
 ## Next steps
 
 - Swap `MockPolicy`-grade baselines for the released TikZilla-3B weights
