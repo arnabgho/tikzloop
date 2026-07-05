@@ -12,6 +12,12 @@ dependencies = [
     "pillow>=10.0",
 ]
 
+[project.optional-dependencies]
+# Apple Silicon inference for the policy LLM and the VLM critic
+mlx = [
+    "mlx-lm>=0.28",
+    "mlx-vlm>=0.1.12",
+]
 [project.scripts]
 tikzloop = "tikzloop.cli:main"
 
