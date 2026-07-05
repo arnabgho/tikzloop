@@ -23,6 +23,16 @@ reward = [
     "torch>=2.3",
     "transformers>=4.45",
 ]
+# Local GRPO training on Apple Silicon
+train = [
+    "mlx-lm-lora>=2.1.0",
+    "datasets>=3.0",
+    "torch>=2.3",
+    "transformers>=4.45",
+    "python-dotenv>=1.0",
+    "wandb>=0.17",
+]
+
 [project.scripts]
 tikzloop = "tikzloop.cli:main"
 
