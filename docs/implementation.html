@@ -1,0 +1,826 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>tikzloop — Implementation Notes &amp; Colab RL Setup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=STIX+Two+Text:ital,wght@0,400;0,600;0,700;1,400;1,600&family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #faf6ee;
+    --paper-deep: #f3ede0;
+    --ink: #21201c;
+    --ink-soft: #55524a;
+    --rule: #d8d0be;
+    --crimson: #a4243b;
+    --tikzblue: #2b4e9b;
+    --tikzgreen: #3d7a45;
+    --amber: #b07d24;
+    --code-bg: #14130f;
+    --code-ink: #e8e2d2;
+    --serif: "STIX Two Text", Georgia, serif;
+    --mono: "IBM Plex Mono", ui-monospace, monospace;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: var(--serif);
+    background:
+      linear-gradient(transparent 23px, rgba(43,78,155,0.045) 24px),
+      linear-gradient(90deg, transparent 23px, rgba(43,78,155,0.045) 24px),
+      var(--paper);
+    background-size: 24px 24px;
+    color: var(--ink);
+    font-size: 17px;
+    line-height: 1.62;
+  }
+
+  .sheet {
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 0 32px 120px;
+  }
+
+  /* ---------- masthead ---------- */
+  header {
+    padding: 72px 0 36px;
+    border-bottom: 3px double var(--ink);
+    position: relative;
+  }
+  .kicker {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--crimson);
+    margin-bottom: 18px;
+  }
+  h1 {
+    font-size: clamp(34px, 5.4vw, 52px);
+    font-weight: 700;
+    line-height: 1.08;
+    letter-spacing: -0.01em;
+  }
+  h1 .tt { font-family: var(--mono); font-weight: 600; font-size: 0.88em; }
+  .subtitle {
+    font-style: italic;
+    font-size: 20px;
+    color: var(--ink-soft);
+    margin-top: 14px;
+    max-width: 46ch;
+  }
+  .meta-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 28px;
+    margin-top: 26px;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    color: var(--ink-soft);
+  }
+  .meta-row b { color: var(--ink); font-weight: 600; }
+
+  /* ---------- abstract ---------- */
+  .abstract {
+    margin: 40px auto 0;
+    padding: 26px 34px;
+    background: var(--paper-deep);
+    border-left: 4px solid var(--crimson);
+    font-size: 15.5px;
+  }
+  .abstract .abs-label {
+    font-variant: small-caps;
+    letter-spacing: 0.14em;
+    font-weight: 700;
+    display: block;
+    margin-bottom: 8px;
+  }
+
+  /* ---------- table of contents ---------- */
+  nav.toc {
+    margin: 44px 0 0;
+    columns: 2;
+    column-gap: 48px;
+    font-size: 15px;
+  }
+  nav.toc a {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+    color: var(--ink);
+    text-decoration: none;
+    padding: 5px 0;
+    border-bottom: 1px dotted var(--rule);
+    break-inside: avoid;
+  }
+  nav.toc a:hover .toc-title { color: var(--crimson); }
+  nav.toc .toc-num { font-family: var(--mono); font-size: 12px; color: var(--crimson); min-width: 22px; }
+  nav.toc .toc-title { flex: 1; }
+  nav.toc .toc-pg { font-family: var(--mono); font-size: 11px; color: var(--ink-soft); }
+
+  /* ---------- sections ---------- */
+  main { counter-reset: sec; }
+  section { margin-top: 84px; }
+  section > h2 {
+    counter-increment: sec;
+    counter-reset: subsec fig-in;
+    font-size: 29px;
+    font-weight: 700;
+    line-height: 1.15;
+    padding-bottom: 12px;
+    border-bottom: 1.5px solid var(--ink);
+    margin-bottom: 30px;
+    display: flex;
+    align-items: baseline;
+    gap: 18px;
+  }
+  section > h2::before {
+    content: "§" counter(sec);
+    font-family: var(--mono);
+    font-weight: 500;
+    font-size: 0.62em;
+    color: var(--crimson);
+  }
+  h3 {
+    counter-increment: subsec;
+    font-size: 20px;
+    font-weight: 700;
+    margin: 42px 0 14px;
+  }
+  h3::before {
+    content: counter(sec) "." counter(subsec) "  ";
+    font-family: var(--mono);
+    font-weight: 500;
+    font-size: 0.75em;
+    color: var(--crimson);
+  }
+  p { margin: 14px 0; }
+  p + p { text-indent: 1.6em; }
+  em { font-style: italic; }
+  a { color: var(--tikzblue); }
+
+  code:not(pre code) {
+    font-family: var(--mono);
+    font-size: 0.82em;
+    background: rgba(43,78,155,0.08);
+    border: 1px solid rgba(43,78,155,0.14);
+    border-radius: 3px;
+    padding: 1px 5px;
+    white-space: nowrap;
+  }
+
+  /* ---------- code blocks ---------- */
+  .codeblock {
+    margin: 22px 0;
+    border-radius: 6px;
+    overflow: hidden;
+    box-shadow: 4px 5px 0 rgba(33,32,28,0.16);
+    border: 1px solid #000;
+  }
+  .codeblock .bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #26241d;
+    color: #b7b09a;
+    font-family: var(--mono);
+    font-size: 11.5px;
+    letter-spacing: 0.06em;
+    padding: 7px 14px;
+    border-bottom: 1px solid #000;
+  }
+  .codeblock .bar .lang { color: var(--amber); text-transform: uppercase; letter-spacing: 0.18em; font-size: 10px; }
+  .codeblock pre {
+    background: var(--code-bg);
+    color: var(--code-ink);
+    padding: 18px 20px;
+    overflow-x: auto;
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.65;
+  }
+  .cm  { color: #8a8264; font-style: italic; }   /* comment */
+  .kw  { color: #e2a13d; }                       /* keyword */
+  .st  { color: #9dc37a; }                       /* string */
+  .fn  { color: #7fb3e8; }                       /* function */
+  .nm  { color: #d98a9a; }                       /* number / flag */
+
+  /* notebook-style cells for the Colab section */
+  .cell { display: flex; gap: 14px; margin: 26px 0; }
+  .cell .prompt {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    color: var(--tikzblue);
+    white-space: nowrap;
+    padding-top: 14px;
+    min-width: 58px;
+    text-align: right;
+    font-weight: 600;
+  }
+  .cell .codeblock { flex: 1; margin: 0; }
+
+  /* ---------- figures ---------- */
+  figure {
+    margin: 36px 0;
+    counter-increment: fig;
+    text-align: center;
+  }
+  figure svg { max-width: 100%; height: auto; }
+  figcaption {
+    margin-top: 14px;
+    font-size: 14px;
+    color: var(--ink-soft);
+    max-width: 62ch;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  figcaption b { color: var(--ink); font-style: normal; }
+
+  /* ---------- callout boxes ---------- */
+  .box {
+    margin: 26px 0;
+    padding: 18px 22px 16px;
+    border: 1.5px solid var(--ink);
+    background: var(--paper);
+    position: relative;
+    box-shadow: 5px 6px 0 rgba(33,32,28,0.12);
+  }
+  .box .box-tag {
+    position: absolute;
+    top: -11px;
+    left: 14px;
+    background: var(--ink);
+    color: var(--paper);
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    padding: 3px 10px;
+  }
+  .box.warn { border-color: var(--crimson); }
+  .box.warn .box-tag { background: var(--crimson); }
+  .box.tip  { border-color: var(--tikzgreen); }
+  .box.tip .box-tag { background: var(--tikzgreen); }
+  .box p:first-of-type { margin-top: 4px; }
+
+  /* ---------- tables ---------- */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 24px 0;
+    font-size: 14.5px;
+  }
+  caption {
+    caption-side: top;
+    text-align: left;
+    font-size: 13.5px;
+    color: var(--ink-soft);
+    padding-bottom: 8px;
+  }
+  caption b { color: var(--ink); }
+  th {
+    font-variant: small-caps;
+    letter-spacing: 0.06em;
+    text-align: left;
+    border-top: 2px solid var(--ink);
+    border-bottom: 1px solid var(--ink);
+    padding: 8px 12px;
+    font-size: 14px;
+  }
+  td { padding: 8px 12px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  tr:last-child td { border-bottom: 2px solid var(--ink); }
+  td.mono, th.mono { font-family: var(--mono); font-size: 12.5px; }
+  .ok { color: var(--tikzgreen); font-weight: 600; }
+  .no { color: var(--crimson); font-weight: 600; }
+
+  /* module ledger */
+  .ledger { list-style: none; margin: 24px 0; }
+  .ledger li {
+    display: grid;
+    grid-template-columns: 170px 1fr;
+    gap: 18px;
+    padding: 13px 0;
+    border-bottom: 1px solid var(--rule);
+  }
+  .ledger li:first-child { border-top: 2px solid var(--ink); }
+  .ledger .file { font-family: var(--mono); font-size: 13px; font-weight: 600; color: var(--tikzblue); }
+  .ledger .what { font-size: 15px; }
+
+  /* checklist */
+  .checklist { list-style: none; margin: 20px 0; }
+  .checklist li {
+    padding: 9px 0 9px 38px;
+    position: relative;
+    border-bottom: 1px dotted var(--rule);
+  }
+  .checklist li::before {
+    content: "✓";
+    position: absolute;
+    left: 6px;
+    top: 8px;
+    color: var(--paper);
+    background: var(--tikzgreen);
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  footer {
+    margin-top: 100px;
+    padding-top: 22px;
+    border-top: 3px double var(--ink);
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--ink-soft);
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  @media (max-width: 640px) {
+    nav.toc { columns: 1; }
+    .ledger li { grid-template-columns: 1fr; gap: 4px; }
+    .cell { flex-direction: column; gap: 4px; }
+    .cell .prompt { text-align: left; padding-top: 0; }
+  }
+</style>
+</head>
+<body>
+<div class="sheet">
+
+<header>
+  <div class="kicker">Lab Notebook · Text-to-TikZ · RL from Rendered Feedback</div>
+  <h1><span class="tt">tikzloop</span>: a verification sandbox &amp; multi-turn environment for Text-to-TikZ</h1>
+  <p class="subtitle">Implementation notes for the M3 Pro prototype, and a recipe for lifting the same loop into GRPO training on Google Colab.</p>
+  <div class="meta-row">
+    <span><b>base paper</b> TikZilla (arXiv:2603.03072)</span>
+    <span><b>repo</b> ~/tinkering-projects/tikzloop</span>
+    <span><b>status</b> 11/11 tests passing</span>
+    <span><b>date</b> July 2026</span>
+  </div>
+
+  <div class="abstract">
+    <span class="abs-label">Abstract</span>
+    TikZilla trains small LLMs to emit TikZ programs, rewarded by comparing the <em>rendered</em> figure
+    against ground truth. We reproduce the executable core of that idea as a local prototype: a hardened
+    compile-and-render <b>sandbox</b> (tectonic + poppler), a gym-style <b>multi-turn environment</b> whose
+    observations are compiler errors and VLM critiques, and an <b>inference loop</b> (episode repair +
+    best-of-N reranking) running entirely on Apple Silicon via MLX. Everything below the policy is pure CPU,
+    so the identical sandbox becomes the reward function for GRPO-LoRA training on a free/cheap Colab GPU.
+  </div>
+
+  <nav class="toc">
+    <a href="#arch"><span class="toc-num">§1</span><span class="toc-title">Architecture at a glance</span></a>
+    <a href="#sandbox"><span class="toc-num">§2</span><span class="toc-title">The verification sandbox</span></a>
+    <a href="#env"><span class="toc-num">§3</span><span class="toc-title">Environment, policy, critic, reward</span></a>
+    <a href="#lessons"><span class="toc-num">§4</span><span class="toc-title">Field notes: what actually broke</span></a>
+    <a href="#colab"><span class="toc-num">§5</span><span class="toc-title">The RL training loop on Colab</span></a>
+    <a href="#budget"><span class="toc-num">§6</span><span class="toc-title">VRAM &amp; cost budgets</span></a>
+  </nav>
+</header>
+
+<main>
+
+<!-- ============================== §1 ============================== -->
+<section id="arch">
+  <h2>Architecture at a glance</h2>
+
+  <p>The design principle: <em>everything except the neural networks is deterministic, cheap, and portable.</em>
+  One episode of the environment looks like this —</p>
+
+  <figure>
+    <svg viewBox="0 0 800 348" xmlns="http://www.w3.org/2000/svg" font-family="IBM Plex Mono, monospace">
+      <defs>
+        <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M 0 1 L 9 5 L 0 9 z" fill="#21201c"/>
+        </marker>
+        <marker id="arrR" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M 0 1 L 9 5 L 0 9 z" fill="#a4243b"/>
+        </marker>
+      </defs>
+
+      <!-- description node -->
+      <rect x="20" y="132" width="128" height="64" rx="10" fill="#f3ede0" stroke="#21201c" stroke-width="1.6"/>
+      <text x="84" y="160" text-anchor="middle" font-size="12.5" font-weight="600" fill="#21201c">description</text>
+      <text x="84" y="177" text-anchor="middle" font-size="10" fill="#55524a">(+ gt image)</text>
+
+      <!-- policy -->
+      <rect x="208" y="126" width="140" height="76" rx="6" fill="#2b4e9b" stroke="#21201c" stroke-width="1.6"/>
+      <text x="278" y="158" text-anchor="middle" font-size="13" font-weight="600" fill="#faf6ee">POLICY</text>
+      <text x="278" y="176" text-anchor="middle" font-size="10" fill="#c9d6f2">TikZilla-3B · mlx-lm</text>
+
+      <!-- sandbox -->
+      <rect x="418" y="120" width="150" height="88" rx="6" fill="#faf6ee" stroke="#a4243b" stroke-width="2" stroke-dasharray="none"/>
+      <rect x="426" y="128" width="134" height="72" rx="4" fill="none" stroke="#a4243b" stroke-width="1" stroke-dasharray="4 3"/>
+      <text x="493" y="153" text-anchor="middle" font-size="13" font-weight="600" fill="#a4243b">SANDBOX</text>
+      <text x="493" y="171" text-anchor="middle" font-size="10" fill="#55524a">tectonic --untrusted</text>
+      <text x="493" y="186" text-anchor="middle" font-size="10" fill="#55524a">pdftoppm · timeouts</text>
+
+      <!-- critic -->
+      <rect x="638" y="42" width="142" height="70" rx="6" fill="#3d7a45" stroke="#21201c" stroke-width="1.6"/>
+      <text x="709" y="71" text-anchor="middle" font-size="13" font-weight="600" fill="#faf6ee">CRITIC</text>
+      <text x="709" y="89" text-anchor="middle" font-size="10" fill="#d3e6d5">Qwen2.5-VL · mlx-vlm</text>
+
+      <!-- reward -->
+      <rect x="638" y="216" width="142" height="70" rx="6" fill="#b07d24" stroke="#21201c" stroke-width="1.6"/>
+      <text x="709" y="245" text-anchor="middle" font-size="13" font-weight="600" fill="#faf6ee">REWARD</text>
+      <text x="709" y="263" text-anchor="middle" font-size="10" fill="#f2e3c4">patch-EMD vs gt</text>
+
+      <!-- arrows -->
+      <line x1="148" y1="164" x2="204" y2="164" stroke="#21201c" stroke-width="1.6" marker-end="url(#arr)"/>
+      <line x1="348" y1="164" x2="414" y2="164" stroke="#21201c" stroke-width="1.6" marker-end="url(#arr)"/>
+      <text x="381" y="154" text-anchor="middle" font-size="10" fill="#55524a">code</text>
+
+      <path d="M 568 140 C 606 120, 606 100, 634 84" fill="none" stroke="#21201c" stroke-width="1.6" marker-end="url(#arr)"/>
+      <text x="612" y="97" text-anchor="middle" font-size="10" fill="#55524a">png</text>
+
+      <path d="M 568 190 C 606 210, 606 232, 634 246" fill="none" stroke="#21201c" stroke-width="1.6" marker-end="url(#arr)"/>
+      <text x="612" y="240" text-anchor="middle" font-size="10" fill="#55524a">png</text>
+
+      <!-- feedback loop: critic -> policy -->
+      <path d="M 709 42 C 709 6, 278 6, 278 122" fill="none" stroke="#a4243b" stroke-width="1.8" stroke-dasharray="6 4" marker-end="url(#arrR)"/>
+      <text x="490" y="24" text-anchor="middle" font-size="10.5" fill="#a4243b" font-weight="600">critique / compiler errors → next-turn observation</text>
+
+      <!-- compile fail loop -->
+      <path d="M 493 208 C 493 296, 300 320, 279 206" fill="none" stroke="#a4243b" stroke-width="1.8" stroke-dasharray="6 4" marker-end="url(#arrR)"/>
+      <text x="392" y="308" text-anchor="middle" font-size="10.5" fill="#a4243b" font-weight="600">compile error log → repair turn</text>
+
+      <!-- reward annotation -->
+      <text x="709" y="308" text-anchor="middle" font-size="10" fill="#55524a" font-style="italic">training/eval only —</text>
+      <text x="709" y="322" text-anchor="middle" font-size="10" fill="#55524a" font-style="italic">never shown to policy</text>
+    </svg>
+    <figcaption><b>Figure 1.</b> One episode. The <span style="color:var(--crimson)">dashed red arrows</span> are the multi-turn loop: whatever the sandbox or critic complains about becomes the policy's next observation, up to <code>max_turns</code>. The reward path is deliberately separate — it scores against ground truth and is never leaked into the prompt.</figcaption>
+  </figure>
+
+  <p>Six modules, one job each:</p>
+  <ul class="ledger">
+    <li><span class="file">sandbox.py</span><span class="what">TikZ source → <code>CompileResult{ok, log, image}</code>. Tectonic in untrusted mode, command denylist, timeout, memory rlimit (Linux), capped 150&nbsp;dpi render via <code>pdftoppm</code>. Auto-wraps bare <code>tikzpicture</code>s, hoists preamble commands, injects packages/libraries it detects in the body.</span></li>
+    <li><span class="file">env.py</span><span class="what"><code>TikZEnv.reset(description, gt) / .step(code) → StepResult</code>. Termination on critic acceptance or turn budget. Pluggable <code>Critic</code> protocol and <code>reward_fn</code>.</span></li>
+    <li><span class="file">policy.py</span><span class="what"><code>MLXPolicy</code> wraps any mlx-lm chat model; <code>build_messages</code> threads (code, feedback) history into a repair conversation; <code>extract_code</code> parses fenced blocks. <code>MockPolicy</code> keeps tests model-free.</span></li>
+    <li><span class="file">critic.py</span><span class="what"><code>VLMCritic</code> (Qwen2.5-VL-3B-4bit) judges render vs. description, returns strict JSON <code>{matches, issues[]}</code> parsed into actionable feedback.</span></li>
+    <li><span class="file">reward.py</span><span class="what">SigLIP patch embeddings + relaxed Earth Mover's similarity — a faithful stand-in for TikZilla's DeTikZify encoder EMD reward, swappable behind the same <code>(img, gt) → [0,1]</code> interface.</span></li>
+    <li><span class="file">loop.py</span><span class="what"><code>run_episode</code> (multi-turn repair), <code>best_of_n</code> (sample-compile-rerank), JSONL episode logging — the raw material for hindsight-repair training data.</span></li>
+  </ul>
+</section>
+
+<!-- ============================== §2 ============================== -->
+<section id="sandbox">
+  <h2>The verification sandbox</h2>
+
+  <p>A TikZ sandbox is easier than a general code sandbox: the artifact is a picture, not a process.
+  What we defend is the <em>loop</em>, against three failure modes of model-generated LaTeX:</p>
+
+  <table>
+    <caption><b>Table 1.</b> Threat model and mitigations, each covered by a test.</caption>
+    <thead><tr><th>Failure mode</th><th>Example</th><th>Mitigation</th><th class="mono">test</th></tr></thead>
+    <tbody>
+      <tr><td>Non-termination</td><td class="mono">\loop\iftrue\repeat</td><td>subprocess timeout (25 s default)</td><td class="mono ok">timeout ✓</td></tr>
+      <tr><td>Shell / filesystem access</td><td class="mono">\write18{...}, \input</td><td><code>--untrusted</code> flag <em>plus</em> pre-compile regex denylist</td><td class="mono ok">rejected ✓</td></tr>
+      <tr><td>Resource blowup</td><td>giant <code>\foreach</code> canvas</td><td>RLIMIT_AS 2 GB (Linux), single page, 150 dpi cap, 2 kB log truncation</td><td class="mono ok">capped ✓</td></tr>
+    </tbody>
+  </table>
+
+  <div class="box tip">
+    <span class="box-tag">Design choice</span>
+    <p><b>Tectonic over TeX Live.</b> A single ~50 MB binary versus a multi-GB apt install that eats
+    10+ minutes of every Colab session. Tectonic fetches LaTeX packages on demand into a cache directory —
+    point <code>XDG_CACHE_HOME</code> at Google Drive and the download happens <em>once, ever</em>.
+    Warm-cache compile time on the M3 Pro: <b>1.7–2.9 s</b> per figure.</p>
+  </div>
+
+  <h3>Making raw model output compilable</h3>
+  <p>Models emit fragments: a bare <code>tikzpicture</code>, sometimes with <code>\usetikzlibrary</code> lines
+  floating above it. <code>ensure_standalone</code> normalizes all of it — and this mirrors TikZilla's
+  "dynamic package inclusion" data-cleaning step:</p>
+
+  <div class="codeblock">
+    <div class="bar"><span>src/tikzloop/sandbox.py — normalization</span><span class="lang">python</span></div>
+<pre><span class="cm"># 1. hoist preamble-only commands the model left in the body</span>
+hoisted = [m.group(0) <span class="kw">for</span> m <span class="kw">in</span> PREAMBLE_LINE.finditer(code)]   <span class="cm"># \usetikzlibrary, \usepackage, ...</span>
+
+<span class="cm"># 2. detect packages from environments        3. detect TikZ libraries from keys</span>
+<span class="st">r"\begin{circuitikz}"</span> → \usepackage{circuitikz}     <span class="st">r"\b(diamond|star,)\b"</span> → shapes.geometric
+<span class="st">r"\begin{axis}"</span>       → \usepackage{pgfplots}       <span class="st">r"\b(above|below)=.*\bof\b"</span> → positioning
+<span class="st">r"\begin{tikzcd}"</span>     → \usepackage{tikz-cd}        <span class="st">r"-\{?(Latex|Stealth)"</span>      → arrows.meta
+
+<span class="cm"># 4. wrap: \documentclass[tikz]{standalone} + preamble + body</span></pre>
+  </div>
+
+  <p>This wasn't speculative hardening — the very first hand-written example (a flowchart with a
+  <code>diamond</code> node) failed to compile until library detection existed. Compilation rate of the
+  <em>harness</em> matters as much as compilation rate of the model.</p>
+</section>
+
+<!-- ============================== §3 ============================== -->
+<section id="env">
+  <h2>Environment, policy, critic, reward</h2>
+
+  <h3>The environment contract</h3>
+  <p>Deliberately gym-shaped, so it can back an inference demo today and a trainer tomorrow:</p>
+
+  <div class="codeblock">
+    <div class="bar"><span>src/tikzloop/env.py — the whole API</span><span class="lang">python</span></div>
+<pre>env = <span class="fn">TikZEnv</span>(critic=<span class="fn">VLMCritic</span>(), reward_fn=<span class="fn">SigLIPReward</span>(), max_turns=<span class="nm">4</span>)
+env.<span class="fn">reset</span>(description, gt_image=gt)
+
+step = env.<span class="fn">step</span>(code)
+<span class="cm"># StepResult(turn, code, compiled, feedback, done, image, reward, compile_seconds)</span>
+<span class="cm">#   compiled=False → feedback is the truncated compiler log  ("fix the TikZ code")</span>
+<span class="cm">#   compiled=True  → feedback is the critic's issue list; done when critic accepts</span></pre>
+  </div>
+
+  <p>Two roles are kept strictly apart. The <b>critic drives the loop</b> — its feedback is the observation
+  the policy conditions on next turn, and it needs no ground truth, so the loop runs on novel descriptions.
+  The <b>reward scores against ground truth</b> — used for reranking, evaluation, and (on Colab) GRPO
+  advantages, but never placed in the prompt. Blurring these is how reward hacking sneaks in.</p>
+
+  <h3>Critic: a VLM as referee</h3>
+  <p>Qwen2.5-VL-3B (4-bit, ~3.5 GB) sees the rendered PNG plus the target description and must answer in
+  strict JSON: <code>{"matches": bool, "issues": [...]}</code>. Issues are phrased as actionable deltas
+  ("node B should be below node A, it is to the right") because they get pasted verbatim into the repair
+  prompt. A <code>CompileOnlyCritic</code> fallback accepts anything that compiles — that mode is the
+  pure compiler-feedback repair loop, and it's what the tests exercise.</p>
+
+  <h3>Reward: relaxed EMD over patch embeddings</h3>
+  <p>TikZilla's reward is an Earth Mover's Distance between patch embeddings from a DeTikZify image encoder.
+  Our prototype substitutes SigLIP (<code>so400m-patch14-384</code> — DeTikZify's encoder is SigLIP-derived)
+  and a relaxed EMD: match every patch to its best counterpart in the other image, average both directions.
+  Same interface, one afternoon simpler; swap in the real DeTikZify-V2 encoder later without touching the env.</p>
+
+  <div class="codeblock">
+    <div class="bar"><span>src/tikzloop/reward.py — the whole trick</span><span class="lang">python</span></div>
+<pre><span class="kw">def</span> <span class="fn">relaxed_emd_similarity</span>(x, y):          <span class="cm"># (n,d), (m,d) L2-normalized patches</span>
+    sim = x @ y.T
+    <span class="kw">return</span> (sim.max(axis=<span class="nm">1</span>).mean() + sim.max(axis=<span class="nm">0</span>).mean()) / <span class="nm">2</span></pre>
+  </div>
+
+  <h3>Two inference harnesses</h3>
+  <p><code>run_episode</code> is Figure 1 as code — generate, step, append feedback, repeat until
+  <code>done</code>. <code>best_of_n</code> is the test-time-scaling experiment: sample N independent
+  programs at temperature 0.7, compile all, rerank by <code>(compiled, reward)</code>. Both log to JSONL;
+  every failed→fixed transition in those logs is a future training example (§5.4).</p>
+</section>
+
+<!-- ============================== §4 ============================== -->
+<section id="lessons">
+  <h2>Field notes: what actually broke</h2>
+
+  <p>Three real defects surfaced while building this — each one is a Colab landmine defused early:</p>
+
+  <table>
+    <caption><b>Table 2.</b> Debugging ledger, M3 Pro session of 2026-07-05.</caption>
+    <thead><tr><th style="width:32%">Symptom</th><th>Root cause</th><th>Fix</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>Valid TikZ failed on turn 2 of a test, compiled fine on turn 3</td>
+        <td><b>Cold-cache flake.</b> The first-ever tectonic compile downloads packages; it landed mid-episode and blew the 25 s timeout</td>
+        <td>Session-scoped <code>warm_tectonic_cache</code> fixture (300 s allowance). On Colab: warm in the setup cell, cache on Drive</td>
+      </tr>
+      <tr>
+        <td><code>import mlx_lm</code> crashed: <code class="no">'str' has no attribute '__module__'</code></td>
+        <td>Upstream bug — mlx-lm ≤ 0.31.3 registers a tokenizer under a string key; every current transformers (4.56 → 5.13) rejects it at import time</td>
+        <td><code>_mlx_compat.py</code> shim wraps <code>AutoTokenizer.register</code> to tolerate the bad call; imported before any mlx module</td>
+      </tr>
+      <tr>
+        <td><code>diamond</code> flowchart node wouldn't compile</td>
+        <td>Bare fragments lack <code>\usetikzlibrary{shapes.geometric}</code>; preamble commands in the body are illegal once wrapped</td>
+        <td>Preamble hoisting + dynamic library detection (§2.1), with regression tests</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="box">
+    <span class="box-tag">Verified</span>
+    <p><b>11/11 tests green</b> in 23 s (warm cache); the example flowchart renders pixel-correct
+    (green rounded Start → blue diamond Valid? → red End, "yes" on the second arrow). Policy inference via
+    mlx-lm confirmed working end-to-end with Qwen2.5-Coder-7B-4bit as the stand-in policy.</p>
+  </div>
+</section>
+
+<!-- ============================== §5 ============================== -->
+<section id="colab">
+  <h2>The RL training loop on Colab</h2>
+
+  <p>The port is small because of what the prototype kept CPU-pure: <b>sandbox, env, reward interface, and
+  episode logging move unchanged.</b> Only the two neural endpoints swap backends — the MLX policy becomes an
+  Unsloth-wrapped CUDA model, and the whole environment collapses into a GRPO reward function.</p>
+
+  <figure>
+    <svg viewBox="0 0 800 270" xmlns="http://www.w3.org/2000/svg" font-family="IBM Plex Mono, monospace">
+      <defs>
+        <marker id="arr2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M 0 1 L 9 5 L 0 9 z" fill="#21201c"/>
+        </marker>
+      </defs>
+      <!-- GPU lane -->
+      <rect x="16" y="30" width="768" height="92" rx="8" fill="rgba(43,78,155,0.07)" stroke="#2b4e9b" stroke-width="1" stroke-dasharray="5 4"/>
+      <text x="30" y="50" font-size="10" fill="#2b4e9b" font-weight="600">GPU (T4 / A100)</text>
+      <!-- CPU lane -->
+      <rect x="16" y="148" width="768" height="92" rx="8" fill="rgba(164,36,59,0.06)" stroke="#a4243b" stroke-width="1" stroke-dasharray="5 4"/>
+      <text x="30" y="168" font-size="10" fill="#a4243b" font-weight="600">CPU (2 workers)</text>
+
+      <rect x="60" y="58" width="160" height="52" rx="6" fill="#2b4e9b" stroke="#21201c" stroke-width="1.5"/>
+      <text x="140" y="80" text-anchor="middle" font-size="12" font-weight="600" fill="#faf6ee">policy + LoRA</text>
+      <text x="140" y="96" text-anchor="middle" font-size="9.5" fill="#c9d6f2">G rollouts / prompt</text>
+
+      <rect x="330" y="176" width="180" height="52" rx="6" fill="#faf6ee" stroke="#a4243b" stroke-width="1.8"/>
+      <text x="420" y="198" text-anchor="middle" font-size="12" font-weight="600" fill="#a4243b">sandbox ×2</text>
+      <text x="420" y="214" text-anchor="middle" font-size="9.5" fill="#55524a">compile + render pool</text>
+
+      <rect x="600" y="58" width="150" height="52" rx="6" fill="#b07d24" stroke="#21201c" stroke-width="1.5"/>
+      <text x="675" y="80" text-anchor="middle" font-size="12" font-weight="600" fill="#faf6ee">reward encoder</text>
+      <text x="675" y="96" text-anchor="middle" font-size="9.5" fill="#f2e3c4">EMD vs gt image</text>
+
+      <rect x="330" y="58" width="180" height="52" rx="6" fill="#21201c" stroke="#21201c" stroke-width="1.5"/>
+      <text x="420" y="80" text-anchor="middle" font-size="12" font-weight="600" fill="#faf6ee">GRPO step</text>
+      <text x="420" y="96" text-anchor="middle" font-size="9.5" fill="#b7b09a">group-centered advantages</text>
+
+      <path d="M 140 110 C 140 200, 240 202, 326 202" fill="none" stroke="#21201c" stroke-width="1.6" marker-end="url(#arr2)"/>
+      <text x="216" y="176" text-anchor="middle" font-size="10" fill="#55524a">G programs</text>
+      <path d="M 510 202 C 600 202, 675 170, 675 114" fill="none" stroke="#21201c" stroke-width="1.6" marker-end="url(#arr2)"/>
+      <text x="612" y="186" text-anchor="middle" font-size="10" fill="#55524a">G renders</text>
+      <line x1="600" y1="84" x2="514" y2="84" stroke="#21201c" stroke-width="1.6" marker-end="url(#arr2)"/>
+      <text x="557" y="74" text-anchor="middle" font-size="10" fill="#55524a">rewards</text>
+      <line x1="326" y1="84" x2="224" y2="84" stroke="#21201c" stroke-width="1.6" marker-end="url(#arr2)"/>
+      <text x="275" y="74" text-anchor="middle" font-size="10" fill="#55524a">∇ update</text>
+
+      <text x="400" y="258" text-anchor="middle" font-size="10.5" fill="#55524a" font-style="italic">pipeline: generate batch k+1 on GPU while batch k compiles on CPU — roughly 2× episodes/hour</text>
+    </svg>
+    <figcaption><b>Figure 2.</b> The training loop on Colab. The sandbox from §2 becomes the middle of the reward function; the GPU never waits on LaTeX if generation and compilation are overlapped.</figcaption>
+  </figure>
+
+  <h3>Cell 1 — runtime setup (~60 s after first run)</h3>
+  <div class="cell">
+    <div class="prompt">In [1]:</div>
+    <div class="codeblock">
+      <div class="bar"><span>setup: tectonic + poppler + Drive-backed caches</span><span class="lang">bash</span></div>
+<pre><span class="fn">from</span> google.colab <span class="fn">import</span> drive; drive.mount(<span class="st">'/content/drive'</span>)
+
+!apt-get -qq install poppler-utils                          <span class="cm"># pdftoppm</span>
+!curl -sL https://drop-sh.fullyjustified.net | sh           <span class="cm"># tectonic binary, ~5 s</span>
+!mv tectonic /usr/local/bin/
+
+<span class="fn">import</span> os
+os.environ[<span class="st">"XDG_CACHE_HOME"</span>] = <span class="st">"/content/drive/MyDrive/tikzloop/cache"</span>  <span class="cm"># packages download once, ever</span>
+os.environ[<span class="st">"HF_HOME"</span>]        = <span class="st">"/content/drive/MyDrive/tikzloop/hf"</span>
+
+!pip -q install unsloth vllm trl datasets pillow
+!pip -q install git+https://github.com/&lt;you&gt;/tikzloop      <span class="cm"># sandbox + env, unchanged from the Mac</span>
+
+<span class="fn">from</span> tikzloop.sandbox <span class="fn">import</span> compile_tikz
+compile_tikz(<span class="st">r"\begin{tikzpicture}\node{warm};\end{tikzpicture}"</span>, timeout=<span class="nm">300</span>)  <span class="cm"># warm the cache (§4!)</span></pre>
+    </div>
+  </div>
+
+  <h3>Cell 2 — policy with LoRA</h3>
+  <div class="cell">
+    <div class="prompt">In [2]:</div>
+    <div class="codeblock">
+      <div class="bar"><span>start from the released TikZilla checkpoint — skip SFT entirely</span><span class="lang">python</span></div>
+<pre><span class="fn">from</span> unsloth <span class="fn">import</span> FastLanguageModel
+
+model, tokenizer = FastLanguageModel.from_pretrained(
+    <span class="st">"nllg/tikzilla-3b"</span>,            <span class="cm"># HF collection: huggingface.co/collections/nllg/tikzilla</span>
+    max_seq_length = <span class="nm">2048</span>,
+    load_in_4bit   = <span class="kw">True</span>,          <span class="cm"># T4: required · A100: use bf16 + fast_inference=True (vLLM)</span>
+)
+model = FastLanguageModel.get_peft_model(
+    model, r=<span class="nm">16</span>, lora_alpha=<span class="nm">32</span>,
+    target_modules=[<span class="st">"q_proj"</span>,<span class="st">"k_proj"</span>,<span class="st">"v_proj"</span>,<span class="st">"o_proj"</span>,<span class="st">"gate_proj"</span>,<span class="st">"up_proj"</span>,<span class="st">"down_proj"</span>],
+)</pre>
+    </div>
+  </div>
+
+  <h3>Cell 3 — the sandbox becomes the reward function</h3>
+  <p>This is the payoff of the prototype: the reward function below is <code>compile_tikz</code> +
+  <code>relaxed_emd_similarity</code>, verbatim. The paper's shaping is preserved — a small format floor for
+  compiling at all, the semantic term on top, zero for anything that doesn't render.</p>
+
+  <div class="cell">
+    <div class="prompt">In [3]:</div>
+    <div class="codeblock">
+      <div class="bar"><span>GRPO reward: compile → render → embed → EMD</span><span class="lang">python</span></div>
+<pre><span class="fn">from</span> concurrent.futures <span class="fn">import</span> ProcessPoolExecutor
+<span class="fn">from</span> tikzloop.sandbox <span class="fn">import</span> compile_tikz
+<span class="fn">from</span> tikzloop.policy  <span class="fn">import</span> extract_code
+<span class="fn">from</span> tikzloop.reward  <span class="fn">import</span> SigLIPReward       <span class="cm"># or the DeTikZify-V2 encoder, same interface</span>
+
+score = SigLIPReward(device=<span class="st">"cuda"</span>)
+pool  = ProcessPoolExecutor(max_workers=<span class="nm">2</span>)       <span class="cm"># Colab gives ~2 cores; compilation is the CPU stage</span>
+
+<span class="kw">def</span> <span class="fn">tikz_reward</span>(prompts, completions, gt_image, **kw):
+    codes   = [extract_code(c[<span class="nm">0</span>][<span class="st">"content"</span>]) <span class="kw">for</span> c <span class="kw">in</span> completions]
+    results = list(pool.map(compile_tikz, codes))             <span class="cm"># parallel, sandboxed, timeout-safe</span>
+    <span class="kw">return</span> [<span class="nm">0.0</span> <span class="kw">if not</span> r.ok
+            <span class="kw">else</span> <span class="nm">0.1</span> + <span class="nm">0.9</span> * score(r.image, gt)               <span class="cm"># format floor + semantic reward ∈ [0,1]</span>
+            <span class="kw">for</span> r, gt <span class="kw">in</span> zip(results, gt_image)]</pre>
+    </div>
+  </div>
+
+  <h3>Cell 4 — GRPO trainer, paper-faithful hyperparameters</h3>
+  <div class="cell">
+    <div class="prompt">In [4]:</div>
+    <div class="codeblock">
+      <div class="bar"><span>Dr.GRPO variant, per TikZilla §5</span><span class="lang">python</span></div>
+<pre><span class="fn">from</span> trl <span class="fn">import</span> GRPOConfig, GRPOTrainer
+
+config = GRPOConfig(
+    num_generations      = <span class="nm">8</span>,          <span class="cm"># G rollouts per description (drop to 4 on T4)</span>
+    max_completion_length= <span class="nm">1024</span>,
+    temperature          = <span class="nm">1.0</span>, top_p = <span class="nm">0.9</span>,   <span class="cm"># paper's sampling</span>
+    beta                 = <span class="nm">0.0</span>,        <span class="cm"># KL disabled, as in the paper</span>
+    epsilon              = <span class="nm">0.2</span>, epsilon_high = <span class="nm">0.28</span>,   <span class="cm"># Clip-Higher (DAPO)</span>
+    loss_type            = <span class="st">"dr_grpo"</span>,  <span class="cm"># token-level normalization, no length bias</span>
+    mask_truncated_completions = <span class="kw">True</span>, <span class="cm"># paper: masking length-capped samples stabilizes training</span>
+    learning_rate        = <span class="nm">5e-6</span>,
+    per_device_train_batch_size = <span class="nm">2</span>, gradient_accumulation_steps = <span class="nm">4</span>,
+    save_steps = <span class="nm">50</span>, output_dir = <span class="st">"/content/drive/MyDrive/tikzloop/ckpt"</span>,
+)
+trainer = GRPOTrainer(model=model, args=config,
+                      train_dataset=ds,               <span class="cm"># description + gt_image columns (DaTikZ-V4 subset)</span>
+                      reward_funcs=[tikz_reward])
+trainer.train(resume_from_checkpoint=<span class="kw">True</span>)            <span class="cm"># idempotent: rerun the notebook, it continues</span></pre>
+    </div>
+  </div>
+
+  <h3>Where the multi-turn loop fits: hindsight repair</h3>
+  <p>True trajectory-level multi-turn RL wants a vLLM server plus an env orchestrator — an A100-tier
+  experiment. The budget path captures most of the value: run the <em>inference</em> loop (free, on the Mac
+  or a T4), log every episode to JSONL, then explode each failed→fixed transition into a single-turn training
+  example whose prompt contains the broken code and the verifier's feedback. Same VRAM as vanilla GRPO,
+  and it directly optimizes the behavior the agentic loop needs — <em>using feedback to repair</em>.</p>
+
+  <div class="cell">
+    <div class="prompt">In [5]:</div>
+    <div class="codeblock">
+      <div class="bar"><span>episodes.jsonl → repair dataset</span><span class="lang">python</span></div>
+<pre><span class="kw">for</span> ep <span class="kw">in</span> episodes:                                  <span class="cm"># logged by loop.append_jsonl on the Mac</span>
+    <span class="kw">for</span> prev, nxt <span class="kw">in</span> zip(ep[<span class="st">"steps"</span>], ep[<span class="st">"steps"</span>][<span class="nm">1</span>:]):
+        rows.append({
+            <span class="st">"prompt"</span>: repair_prompt(ep[<span class="st">"description"</span>], prev[<span class="st">"code"</span>], prev[<span class="st">"feedback"</span>]),
+            <span class="st">"gt_image"</span>: ep[<span class="st">"gt_image"</span>],               <span class="cm"># reward stays identical — rendered EMD vs gt</span>
+        })</pre>
+    </div>
+  </div>
+
+  <div class="box warn">
+    <span class="box-tag">Session survival rules</span>
+    <p>Assume every Colab session dies. <b>(1)</b> Checkpoint adapters to Drive/HF Hub every ~30 min
+    (<code>save_steps</code> above — LoRA adapters are tens of MB). <b>(2)</b> Make cell 1 idempotent:
+    mount, restore caches, <code>resume_from_checkpoint=True</code>. <b>(3)</b> Tectonic cache and HF cache
+    live on Drive, not the VM disk. <b>(4)</b> Test the resume path <em>before</em> the long run —
+    it's the difference between losing ten minutes and losing a day.</p>
+  </div>
+</section>
+
+<!-- ============================== §6 ============================== -->
+<section id="budget">
+  <h2>VRAM &amp; cost budgets</h2>
+
+  <table>
+    <caption><b>Table 3.</b> What fits where. The free tier covers everything up to serious GRPO.</caption>
+    <thead><tr><th>Experiment</th><th>Hardware</th><th>Fits?</th><th>Cost</th></tr></thead>
+    <tbody>
+      <tr><td>Sandbox + env + eval harness, episode logging</td><td>M3 Pro (36 GB) / any CPU</td><td class="ok">yes — CPU only</td><td class="mono">$0</td></tr>
+      <tr><td>Multi-turn inference loop: 3B policy (4-bit, ~3 GB) + VL-3B critic (~3.5 GB) + SigLIP (~1 GB)</td><td>M3 Pro via MLX, or free T4 16 GB</td><td class="ok">yes, comfortably</td><td class="mono">$0</td></tr>
+      <tr><td>GRPO-LoRA on 3B, G=4, debug scale</td><td>T4 16 GB (Kaggle 30 h/wk, Colab free)</td><td class="ok">yes — Unsloth 4-bit, no vLLM</td><td class="mono">$0</td></tr>
+      <tr><td>GRPO-LoRA on 3B, G=8 + vLLM fast rollouts</td><td>A100 40 GB (student Colab Pro units)</td><td class="ok">yes</td><td class="mono">$0 (units)</td></tr>
+      <tr><td>GRPO on 8B, or multi-turn trajectory RL</td><td>A100 80 GB spot (~$0.60–1.07/hr) or 4090 (~$0.34/hr)</td><td class="ok">yes</td><td class="mono">~$15–50 total</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Pre-flight checklist</h3>
+  <ul class="checklist">
+    <li>Claim free <b>Colab Pro for students</b> (.edu verification) and link it to Kaggle for bonus quota</li>
+    <li>Push <code>tikzloop</code> to GitHub so cell 1 can <code>pip install</code> it</li>
+    <li>Full pipeline green at toy scale (0.5B model, 500 samples, G=4) on a free T4 <em>before</em> renting anything</li>
+    <li>Tectonic cache warm on Drive; resume-from-checkpoint path tested with a forced disconnect</li>
+    <li>Baselines logged first: TikZilla-3B zero-shot and best-of-N — the numbers your RL run must beat</li>
+  </ul>
+
+  <p style="margin-top:36px">The experiment sequence this enables, cheapest first: <b>(i)</b> best-of-N
+  reranking with the reward model (free, pure inference, already runnable), <b>(ii)</b> the agentic
+  repair loop with a VLM critic (free), <b>(iii)</b> hindsight-repair GRPO on a T4 ($0), and
+  <b>(iv)</b> the headline run — GRPO with a decomposed, verifiable reward on an A100 (≤ $50).
+  Each stage produces the data and the baseline for the next.</p>
+</section>
+
+</main>
+
+<footer>
+  <span>tikzloop v0.1.0 · prototype of TikZilla-style verified RL</span>
+  <span>M3 Pro → Colab · July 2026</span>
+</footer>
+
+</div>
+</body>
+</html>
