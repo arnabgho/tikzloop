@@ -1,0 +1,7 @@
+\begin{tikzpicture}[node distance=1.5cm]
+  \node[draw, rounded corners, fill=green!30] (start) {Start};
+  \node[draw, diamond, fill=blue!20, below of=start] (valid) {Valid?};
+  \node[draw, fill=red!30, below of=valid] (end) {End};
+  \draw[->] (start) -- (valid);
+  \draw[->] (valid) -- node[right] {yes} (end);
+\end{tikzpicture}
