@@ -1,0 +1,25 @@
+[project]
+name = "tikzloop"
+version = "0.1.0"
+description = "Sandbox + multi-turn environment + inference loop for text-to-TikZ experiments (TikZilla-style)"
+readme = "README.md"
+authors = [
+    { name = "Arnab Ghosh", email = "arnabghosh93@gmail.com" }
+]
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=1.26",
+    "pillow>=10.0",
+]
+
+[project.scripts]
+tikzloop = "tikzloop.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
